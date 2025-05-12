@@ -126,9 +126,8 @@ export default function ConwayGameOfLife() {
 
   useEffect(() => {
     const resize = () => {
-      // Keep grid size at 25x25 as requested, but handle mobile view
       const isMobile = window.innerWidth < 768;
-      setGridSize({ rows: 25, cols: 25 });
+      setGridSize({ rows: isMobile ?25:30, cols: isMobile?25:30 });
     };
     resize();
     window.addEventListener('resize', resize);
@@ -146,7 +145,6 @@ export default function ConwayGameOfLife() {
       onMouseUp={() => setMouseDown(false)}
       onMouseLeave={() => setMouseDown(false)}
     >
-      <h1 className={styles.title}>Life Patterns</h1>
       <p className={styles.subtitle}>Conway's Game in a softer world</p>
 
       <div className={styles.controls}>
