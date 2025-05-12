@@ -1,207 +1,226 @@
+// ConwayGameOfLife.js
 import { useState, useEffect, useCallback, useRef } from 'react';
 import styles from './GameOfLife.module.css';
+
+const presets = {
+  Glider: [
+    [1, 0], [2, 1], [0, 2], [1, 2], [2, 2]
+  ],
+  Blinker: [
+    [1, 0], [1, 1], [1, 2]
+  ],
+  Toad: [
+    [1, 1], [1, 2], [1, 3], [2, 0], [2, 1], [2, 2]
+  ],
+  Pulsar: [
+    [2, 4], [2, 5], [2, 6], [2, 10], [2, 11], [2, 12],
+    [4, 2], [4, 7], [4, 9], [4, 14],
+    [5, 2], [5, 7], [5, 9], [5, 14],
+    [6, 2], [6, 7], [6, 9], [6, 14],
+    [7, 4], [7, 5], [7, 6], [7, 10], [7, 11], [7, 12],
+    [9, 4], [9, 5], [9, 6], [9, 10], [9, 11], [9, 12],
+    [10, 2], [10, 7], [10, 9], [10, 14],
+    [11, 2], [11, 7], [11, 9], [11, 14],
+    [12, 2], [12, 7], [12, 9], [12, 14],
+    [14, 4], [14, 5], [14, 6], [14, 10], [14, 11], [14, 12]
+  ]
+};
 
 export default function ConwayGameOfLife() {
   const [grid, setGrid] = useState([]);
   const [running, setRunning] = useState(false);
+  const [mouseDown, setMouseDown] = useState(false);
   const [gridSize, setGridSize] = useState({ rows: 25, cols: 25 });
+  const [speed, setSpeed] = useState(300);
   const runningRef = useRef(running);
   runningRef.current = running;
 
-
   const initializeGrid = useCallback(() => {
-    const rows = gridSize.rows;
-    const cols = gridSize.cols;
-    const newGrid = Array(rows).fill().map(() => 
-      Array(cols).fill().map(() => ({ alive: false, age: 0 }))
+    const { rows, cols } = gridSize;
+    const newGrid = Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => ({ alive: false, age: 0 }))
     );
     setGrid(newGrid);
     setRunning(false);
   }, [gridSize]);
 
-
-  const toggleCell = (rowIndex, colIndex) => {
-    if (running) return;
+  const loadPreset = (name) => {
+    if (!name) return;
     
-    const newGrid = [...grid];
-    const cell = newGrid[rowIndex][colIndex];
-    cell.alive = !cell.alive;
-    cell.age = cell.alive ? 1 : 0;
-    setGrid(newGrid);
-  };
-
-  const startSimulation = () => {
-    if (!running) {
-      setRunning(true);
-    }
-  };
-
-  const pauseSimulation = () => {
-    setRunning(false);
-  };
-
-  const resetSimulation = () => {
-    setRunning(false);
     initializeGrid();
+    const preset = presets[name];
+    
+    setGrid((g) => {
+      const newGrid = g.map((row) => row.map((cell) => ({ ...cell })));
+      preset.forEach(([r, c]) => {
+        if (r < gridSize.rows && c < gridSize.cols) {
+          newGrid[r][c].alive = true;
+          newGrid[r][c].age = 1;
+        }
+      });
+      return newGrid;
+    });
+  };
+
+  const toggleCell = (row, col) => {
+    if (running) return;
+    setGrid((g) => {
+      const newGrid = g.map((r, rIdx) =>
+        r.map((cell, cIdx) =>
+          rIdx === row && cIdx === col
+            ? { alive: !cell.alive, age: !cell.alive ? 1 : 0 }
+            : cell
+        )
+      );
+      return newGrid;
+    });
   };
 
   const getCellClass = (cell) => {
     if (!cell.alive) return styles.cell;
-    
-    if (cell.age === 1) {
-      return `${styles.cell} ${styles.cellBorn}`;
-    } else if (cell.age > 4) {
-      return `${styles.cell} ${styles.cellDying}`;
-    } else {
-      return `${styles.cell} ${styles.cellAlive}`;
-    }
+    if (cell.age === 1) return `${styles.cell} ${styles.cellBorn}`;
+    if (cell.age > 4) return `${styles.cell} ${styles.cellDying}`;
+    return `${styles.cell} ${styles.cellAlive}`;
   };
 
   const countNeighbors = (grid, row, col) => {
-    const rows = gridSize.rows;
-    const cols = gridSize.cols;
+    const { rows, cols } = gridSize;
     let count = 0;
-    
-    // Check all 8 neighbors
     for (let i = -1; i <= 1; i++) {
       for (let j = -1; j <= 1; j++) {
         if (i === 0 && j === 0) continue;
-        
         const r = (row + i + rows) % rows;
         const c = (col + j + cols) % cols;
-        
         if (grid[r][c].alive) count++;
       }
     }
-    
     return count;
   };
 
   const runSimulation = useCallback(() => {
     if (!runningRef.current) return;
-    
     setGrid((currentGrid) => {
-      const rows = gridSize.rows;
-      const cols = gridSize.cols;
-      const newGrid = JSON.parse(JSON.stringify(currentGrid));
-      
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const neighbors = countNeighbors(currentGrid, row, col);
-          const cell = currentGrid[row][col];
+      const { rows, cols } = gridSize;
+      const newGrid = currentGrid.map((row, rIdx) =>
+        row.map((cell, cIdx) => {
+          const neighbors = countNeighbors(currentGrid, rIdx, cIdx);
           if (cell.alive) {
-            // Live cell with fewer than 2 or more than 3 live neighbors dies
-            if (neighbors < 2 || neighbors > 3) {
-              newGrid[row][col].alive = false;
-              newGrid[row][col].age = 0;
-            } else {
-              // Live cell with 2 or 3 live neighbors lives on
-              newGrid[row][col].age = Math.min(cell.age + 1, 5);
-            }
-          } else {
-            // Dead cell with exactly 3 live neighbors becomes alive
-            if (neighbors === 3) {
-              newGrid[row][col].alive = true;
-              newGrid[row][col].age = 1;
-            }
+            if (neighbors < 2 || neighbors > 3) return { alive: false, age: 0 };
+            return { alive: true, age: Math.min(cell.age + 1, 5) };
           }
-        }
-      }
-      
+          return neighbors === 3 ? { alive: true, age: 1 } : cell;
+        })
+      );
       return newGrid;
     });
-    
-    setTimeout(() => {
-      runSimulation();
-    }, 400);
-  }, [gridSize]);
+    setTimeout(runSimulation, speed);
+  }, [gridSize, speed]);
 
   useEffect(() => {
     initializeGrid();
   }, [initializeGrid]);
 
   useEffect(() => {
-    if (running) {
-      runSimulation();
-    }
+    if (running) runSimulation();
   }, [running, runSimulation]);
 
   useEffect(() => {
-    const handleResize = () => {
+    const resize = () => {
+      // Keep grid size at 25x25 as requested, but handle mobile view
       const isMobile = window.innerWidth < 768;
-      setGridSize({
-        rows: isMobile ? 20 : 25,
-        cols: isMobile ? 20 : 25
-      });
+      setGridSize({ rows: 25, cols: 25 });
     };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
   }, []);
 
+  const handleSpeedChange = (e) => {
+    setSpeed(600 - e.target.value);
+  };
+
   return (
-    <div className={styles.gameContainer}>
-      <h1 className={styles.title}>Conway's Game of Life</h1>
-      
+    <div
+      className={styles.gameContainer}
+      onMouseDown={() => setMouseDown(true)}
+      onMouseUp={() => setMouseDown(false)}
+      onMouseLeave={() => setMouseDown(false)}
+    >
+      <h1 className={styles.title}>Life Patterns</h1>
+      <p className={styles.subtitle}>Conway's Game in a softer world</p>
+
       <div className={styles.controls}>
-        <button 
-          className={`${styles.button} ${styles.startButton}`} 
-          onClick={startSimulation}
-          disabled={running}>
-          Start
-        </button>
-        <button 
-          className={`${styles.button} ${styles.pauseButton}`} 
-          onClick={pauseSimulation}
-          disabled={!running}>
-          Pause
-        </button>
-        <button 
-          className={`${styles.button} ${styles.resetButton}`} 
-          onClick={resetSimulation}>
-          Reset
-        </button>
-      </div>
-      
-      <div className={styles.legend}>
-        <div className={styles.legendItem}>
-          <div className={`${styles.legendColor} ${styles.cellBorn}`}></div>
-          <span>New Cell</span>
-        </div>
-        <div className={styles.legendItem}>
-          <div className={`${styles.legendColor} ${styles.cellAlive}`}></div>
-          <span>Stable Cell</span>
-        </div>
-        <div className={styles.legendItem}>
-          <div className={`${styles.legendColor} ${styles.cellDying}`}></div>
-          <span>Aging Cell</span>
-        </div>
+          <select
+            className={styles.select}
+            onChange={(e) => loadPreset(e.target.value)}
+          >
+            <option value="">Select Pattern</option>
+            {Object.keys(presets).map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          
+          <button 
+            className={`${styles.button} ${styles.startButton}`} 
+            onClick={() => setRunning(true)} 
+            disabled={running}
+          >
+            Begin
+          </button>
+          
+          <button 
+            className={`${styles.button} ${styles.pauseButton}`} 
+            onClick={() => setRunning(false)} 
+            disabled={!running}
+          >
+            Pause
+          </button>
+          
+          <button 
+            className={`${styles.button} ${styles.resetButton}`} 
+            onClick={initializeGrid}
+          >
+            Clear
+          </button>
       </div>
 
       <div className={styles.gridContainer}>
-        <div 
+        
+        <div
           className={styles.grid}
           style={{
             gridTemplateRows: `repeat(${gridSize.rows}, 1fr)`,
             gridTemplateColumns: `repeat(${gridSize.cols}, 1fr)`
           }}
         >
-          {grid.map((row, rowIndex) => 
+          
+          {grid.map((row, rowIndex) =>
             row.map((cell, colIndex) => (
               <div
                 key={`${rowIndex}-${colIndex}`}
                 className={getCellClass(cell)}
+                onMouseEnter={() => mouseDown && toggleCell(rowIndex, colIndex)}
                 onClick={() => toggleCell(rowIndex, colIndex)}
               />
             ))
           )}
         </div>
       </div>
-      
-      <div className={styles.instructions}>
-        <p>Click cells to set initial state, then press Start to begin simulation</p>
-        <p>Cells change color as they age through their lifecycle</p>
+
+      <div className={styles.controlsContainer}>
+        
+
+        <div className={styles.speedControl}>
+          <span>Speed</span>
+          <input
+            type="range"
+            min="100"
+            max="500"
+            value={600 - speed}
+            onChange={handleSpeedChange}
+            className={styles.slider}
+          />
+        </div>
       </div>
     </div>
   );
